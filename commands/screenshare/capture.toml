@@ -5,6 +5,8 @@ prompt = '''
 You have the tools: screenshare_status, screenshare_start, screenshare_capture.
 
 Behavior:
+0) Respect the [defaults] section for any missing args.
+
 1) Ensure source is open:
    - Call screenshare_status().
    - If open=false, call screenshare_start(monitor_index={{monitor_index|0}}, left={{left|0}}, top={{top|0}},
@@ -14,7 +16,7 @@ Behavior:
 2) Parse args (optional):
    - save_dir:str (default ".")
    - format:str   (default "jpg"; 'jpg'|'png')
-   - prompt:str   (default "")
+   - prompt:str   (default "What can you tell me about this capture?")
    - outfile:str  (simple filename, no '/'; optional alias to also copy the frame to AND use in the prompt)
 
 3) Call screenshare_capture(save_dir={{save_dir|"."}}, format={{format|"jpg"}}).
@@ -86,6 +88,7 @@ Behavior:
 [defaults]
 save_dir = "."
 format   = "jpg"
+prompt   = "What can you tell me about this capture?"
 monitor_index = 0
 left = 0
 top = 0
