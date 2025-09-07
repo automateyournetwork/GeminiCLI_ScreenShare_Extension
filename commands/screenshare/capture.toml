@@ -14,18 +14,13 @@ Behavior:
    - If still not open, print "Screen source closed — cannot capture." and stop.
 
 2) Parse args (optional):
-   - save_dir:str (default ".")
    - format:str   (default "jpg"; 'jpg'|'png')
    - prompt:str   (default "What can you tell me about this capture?")
-   - outfile:str  (simple filename, no '/'; optional alias to also copy the frame to AND use in the prompt)
 
-3) Call screenshare_capture(save_dir={{save_dir|"."}}, format={{format|"jpg"}}).
-   Bind:
-     {{captured_path}} ← .path
-     {{mime}}          ← .mime
-     {{width}}         ← .width
-     {{height}}        ← .height
-
+3) Call screenshare_capture.
+  - Save to the local folder {{save_dir|.}} with format {{format|jpg}}.
+  - Capture returns: captured_path:str, mime:str, width:int, height:int.
+  
 4) If prompt is empty or None, use: "What can you tell me about this capture?"
 
 5) If prompt present:
