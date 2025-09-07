@@ -1,0 +1,12 @@
+name = "/screenshare:status"
+description = "Show whether screen source is initialized and its properties"
+
+prompt = """
+You have the tool: screenshare_status.
+
+Goal:
+- Call screenshare_status() once.
+- If open=false: print "Screen source closed."
+- If open=true: print "Screen source open (monitor_index=..., region={left,top,width,height}, scale=...)."
+- Be concise; no extra commentary.
+"""

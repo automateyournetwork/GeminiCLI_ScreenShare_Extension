@@ -1,0 +1,14 @@
+name = "/screenshare:devices"
+description = "List available displays/monitors (0=virtual, 1..N=physical)."
+
+prompt = """
+You have the tool: list_displays.
+
+Goal:
+- Call list_displays(max_index=10) and print a concise table:
+  index | virtual | left,top | width x height
+
+Rules:
+- Do not call other tools.
+- If no displays are returned, suggest checking OS permissions (screen recording), and that the app has Screen Recording access on macOS or equivalent on Windows/Linux.
+"""

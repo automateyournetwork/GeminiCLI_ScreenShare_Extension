@@ -1,0 +1,4 @@
+mcp
+fastmcp
+mss
+pillow

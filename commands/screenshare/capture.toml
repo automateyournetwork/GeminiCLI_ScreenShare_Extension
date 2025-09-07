@@ -1,0 +1,94 @@
+name = "/screenshare:capture"
+description = "Capture one frame. If prompt=... is provided, run 'gemini -p \"@<frame> <prompt>\"'; else just save."
+
+prompt = '''
+You have the tools: screenshare_status, screenshare_start, screenshare_capture.
+
+Behavior:
+1) Ensure source is open:
+   - Call screenshare_status().
+   - If open=false, call screenshare_start(monitor_index={{monitor_index|0}}, left={{left|0}}, top={{top|0}},
+       width={{width|0}}, height={{height|0}}, scale={{scale|1.0}}).
+   - If still not open, print "Screen source closed — cannot capture." and stop.
+
+2) Parse args (optional):
+   - save_dir:str (default ".")
+   - format:str   (default "jpg"; 'jpg'|'png')
+   - prompt:str   (default "")
+   - outfile:str  (simple filename, no '/'; optional alias to also copy the frame to AND use in the prompt)
+
+3) Call screenshare_capture(save_dir={{save_dir|"."}}, format={{format|"jpg"}}).
+   Bind:
+     {{captured_path}} ← .path
+     {{mime}}          ← .mime
+     {{width}}         ← .width
+     {{height}}        ← .height
+
+4) If prompt is empty or None, use: "What can you tell me about this capture?"
+
+5) If prompt present:
+     Choose SEND_NAME:
+       - if outfile provided: copy CAPTURED_PATH -> ./outfile
+       - else use the bare filename of CAPTURED_PATH
+     Then execute:
+       GEMINI_BIN="${GEMINI_BIN:-gemini}"
+       "$GEMINI_BIN" -p "@<SEND_NAME> <prompt>"
+     Print Gemini’s output verbatim.
+     If the call fails, fall back to printing ONLY: '@<SEND_NAME> <prompt>'.
+
+!{
+  set -euo pipefail
+
+  PROMPT_TEXT="{{prompt}}"
+  OUTFILE_RAW="{{outfile}}"
+  CAPTURED="{{captured_path}}"
+  MIME="{{mime}}"
+  W="{{width}}"
+  H="{{height}}"
+
+  # If prompt missing -> default text
+  if [ -z "${PROMPT_TEXT:-}" ] || [ "$PROMPT_TEXT" = "None" ]; then
+    PROMPT_TEXT="What can you tell me about this capture?"
+  fi
+
+  # If user didn't ask to send to Gemini (explicitly wants just save),
+  # allow empty prompt to print save info and exit.
+  if [ "{{prompt}}" = "" ]; then
+    echo "Saved: $CAPTURED  (mime=$MIME, size=${W}x${H})"
+    exit 0
+  fi
+
+  # Derive bare filename
+  CAPTURED_FILE="$CAPTURED"
+  case "$CAPTURED_FILE" in
+    */*) TMP="$CAPTURED_FILE"; while [ "${TMP#*/}" != "$TMP" ]; do TMP="${TMP#*/}"; done; CAPTURED_FILE="$TMP" ;;
+  esac
+
+  SEND_NAME="$CAPTURED_FILE"
+
+  # Optional alias copy to CWD
+  if [ -n "${OUTFILE_RAW:-}" ] && [ "$OUTFILE_RAW" != "None" ]; then
+    cp -f "$CAPTURED" "./$OUTFILE_RAW"
+    SEND_NAME="$OUTFILE_RAW"
+  fi
+
+  GEMINI_BIN="${GEMINI_BIN:-gemini}"
+
+  if "$GEMINI_BIN" -p "@$SEND_NAME $PROMPT_TEXT"; then
+    exit 0
+  else
+    echo "@$SEND_NAME $PROMPT_TEXT"
+    exit 0
+  fi
+}
+'''
+
+[defaults]
+save_dir = "."
+format   = "jpg"
+monitor_index = 0
+left = 0
+top = 0
+width = 0
+height = 0
+scale = 1.0

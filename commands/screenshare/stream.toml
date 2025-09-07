@@ -1,0 +1,135 @@
+name = "/screenshare:stream"
+description = "Loop: burst → Gemini answer/transcript (or custom prompt) → pause → repeat."
+
+prompt = '''
+You have the tools: screenshare_status, screenshare_start, screenshare_burst.
+
+Args:
+- cycles:int      How many capture→answer loops to run (0 = until safety cap/source closes).
+- pause_secs:int  Seconds to pause so the user can read before the next burst (default 30).
+- mode:str        One of reply | transcribe | both. Default: reply. (Ignored if prompt is provided.)
+- prompt:str      Optional free-form instruction sent to Gemini. If set, overrides 'mode'.
+- save_dir, format, n, period_ms, duration_ms, warmup → forwarded to screenshare_burst.
+- monitor_index,left,top,width,height,scale → used for auto-start if closed.
+
+High-level behavior:
+- Prompt-level HANDS-FREE LOOP: status/auto-start → burst → (one shell: gemini + sleep) → repeat.
+- No loops inside the shell.
+- Re-check status before each burst.
+- Stop when source closed, no frames, cycles reached, or ~60 minutes elapsed.
+
+Per-cycle steps:
+1) screenshare_status(); if open=false → call screenshare_start(...) with given/default geometry; re-check once; if still closed: end politely.
+2) screenshare_burst(...); bind newline-joined paths into {{paths}}; if empty: end politely.
+3) Run the shell once (stride every other frame, ensure tokens resolvable from CWD, build instruction from 'prompt' or 'mode', call gemini, then sleep).
+4) Repeat from step 1 until a stop condition.
+
+!{
+set -euo pipefail
+
+PATHS_RAW="{{paths}}"
+PAUSE="{{pause_secs}}"
+[ -z "$PAUSE" ] && PAUSE="30"
+
+# --- Determine instruction text ---
+MODE="{{mode}}"
+USER_PROMPT="{{prompt}}"
+
+# If user supplied a custom prompt, use it verbatim; otherwise fall back to mode templates.
+if [ -n "${USER_PROMPT:-}" ] && [ "${USER_PROMPT}" != "None" ]; then
+  INSTR="${USER_PROMPT}"
+else
+  [ -z "$MODE" ] && MODE="reply"
+  case "$MODE" in
+    reply)
+      INSTR="You are a helpful assistant analyzing ONLY the attached photo sequence (left→right chronological). First infer the user's intent/content from the sequence; then reply as a concise assistant. Do not show an intermediate transcript."
+      ;;
+    transcribe)
+      INSTR="Analyze ONLY the attached photo sequence (left→right chronological). Transcribe what the user is conveying. If unsure about a term, bracket it in ALL CAPS. Output ONLY the transcript."
+      ;;
+    both)
+      INSTR="1) Transcribe what the user is conveying from the attached photo sequence (left→right).
+2) On the next line, reply as a helpful assistant.
+Format exactly:
+Transcript: <text>
+Assistant: <reply>"
+      ;;
+    *)
+      INSTR="Analyze ONLY the attached photo sequence and reply helpfully."
+      ;;
+  esac
+fi
+
+# --- Prepare selection and CWD copies (because save_dir may not be '.') ---
+mkdir -p ./.screenshare_tmp
+rm -f ./.screenshare_tmp/* 2>/dev/null || true
+
+files_raw=()
+while IFS= read -r P; do
+  [ -z "$P" ] && continue
+  files_raw+=("$P")
+done <<'EOF'
+$PATHS_RAW
+EOF
+
+if [ "${#files_raw[@]}" -eq 0 ]; then
+  echo "No frames returned — ending."
+  exit 0
+fi
+
+# Stride every other frame
+files=()
+take=1
+for P in "${files_raw[@]}"; do
+  if [ $take -eq 1 ]; then
+    B="${P##*/}"
+    cp -f "$P" "./.screenshare_tmp/$B"
+    files+=("@.screenshare_tmp/$B")
+    take=0
+  else
+    take=1
+  fi
+done
+
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "No frames selected after stride — ending."
+  exit 0
+fi
+
+prefix=""
+for f in "${files[@]}"; do
+  prefix="$prefix$f "
+done
+
+# --- One-shot call: print assistant reply/transcript per mode or custom prompt ---
+gemini -p "${prefix}${INSTR}"
+
+echo "(pausing ${PAUSE}s before next capture…)"
+sleep "$PAUSE"
+}
+
+Loop rules:
+- If {{cycles}} > 0, repeat that many times unless a stop condition triggers earlier.
+- If {{cycles}} == 0, repeat until screen source closes or ~60 minutes elapse (safety valve).
+'''
+
+[defaults]
+# burst defaults
+format      = "jpg"
+n           = 0
+period_ms   = 150
+duration_ms = 10000
+warmup      = 0
+save_dir    = "."
+# loop defaults
+cycles      = 0
+pause_secs  = 30
+mode        = "reply"
+prompt      = ""            # ← new: optional custom instruction
+# auto-start defaults (full virtual screen @ 1.0 scale)
+monitor_index = 0
+left = 0
+top = 0
+width = 0
+height = 0
+scale = 1.0

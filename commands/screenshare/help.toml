@@ -1,0 +1,25 @@
+name = "/screenshare"
+description = "Show screenshare MCP help and quick usage"
+
+prompt = """
+screenshare (screen snapshots via MCP)
+--------------------------------------
+Subcommands:
+• /screenshare:devices                         List displays (0=virtual all monitors; 1..N=physical).
+• /screenshare:status                          Show current capture source (monitor, region, scale).
+• /screenshare:capture [save_dir=... format=jpg|png prompt='...']
+                                               One screenshot; if prompt is provided, runs 'gemini -p "@<file> <prompt>"'.
+• /screenshare:stream  [n=... period_ms=... duration_ms=... mode=reply|transcribe|both pause_secs=30]
+                                               Timed burst → Gemini → pause → repeat. Auto-starts source if needed.
+
+Notes:
+- If the source isn't initialized, commands auto-start with monitor_index=0 (virtual), full region, scale=1.0.
+- Use /screenshare:devices to discover monitor indexes and geometry.
+- For fine control, pass monitor_index/left/top/width/height/scale to :capture or :stream.
+
+Examples:
+• /screenshare:devices
+• /screenshare:status
+• /screenshare:capture save_dir=. format=jpg prompt="Summarize what's on screen"
+• /screenshare:stream duration_ms=5000 period_ms=200 mode=transcribe
+"""

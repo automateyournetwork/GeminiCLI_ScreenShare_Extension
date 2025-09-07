@@ -1,0 +1,12 @@
+{
+  "name": "screenshare",
+  "version": "1.0.0",
+  "mcpServers": {
+    "screenshare": {
+      "command": "bash",
+      "args": ["${extensionPath}${/}servers${/}run.sh"]
+    }
+  },
+  "contextFileName": "GEMINI.md",
+  "excludeTools": []
+}
