@@ -115,27 +115,97 @@ def _close_source():
             pass
     _SRC.update({"sct": None, "monitor_index": 1, "region": None, "scale": 1.0, "props": {}})
 
+def _is_wsl() -> bool:
+    """Return True if running under Windows Subsystem for Linux."""
+    try:
+        import platform, os
+        if "microsoft" in platform.release().lower() or "microsoft" in platform.version().lower():
+            return True
+        if os.path.exists("/proc/sys/fs/binfmt_misc/WSLInterop"):
+            return True
+        return False
+    except Exception:
+        return False
 
 def _grab() -> Tuple[bool, Optional[Image.Image], str]:
+    from PIL import Image
+    import shutil, subprocess, tempfile
+
     sct = _SRC.get("sct")
     region = _SRC.get("region")
     scale = float(_SRC.get("scale") or 1.0)
+
     if sct is None or region is None:
         return False, None, "Screen source not initialized"
+
+    # --- Fast path: MSS (works on macOS and most X11/Wayland setups) ---
     try:
         raw = sct.grab(region)
-    except Exception as e:
-        return False, None, f"Failed to grab: {e}"
+        img = Image.frombytes("RGB", raw.size, raw.rgb)
+        if 0 < scale < 1.0:
+            w = max(1, int(img.width * scale))
+            h = max(1, int(img.height * scale))
+            img = img.resize((w, h), Image.LANCZOS)
+        return True, img, "ok"
+    except Exception as e_primary:
+        err_primary = str(e_primary)
 
-    # Convert to PIL Image (BGRA)
-    img = Image.frombytes("RGB", raw.size, raw.rgb)  # already RGB via .rgb
+    # --- WSL fallback: capture Windows desktop via PowerShell ---
+    if _is_wsl():
+        try:
+            ps_script = r"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+$g.Dispose()
+$tmp = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "wsl_scrn_{0:yyyyMMdd_HHmmss_fff}.png" -f (Get-Date))
+$bmp.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output $tmp
+"""
+            out = subprocess.check_output(
+                ["powershell.exe", "-NoProfile", "-Command", ps_script],
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=float(os.getenv("SCREENSHARE_WSL_PS_TIMEOUT", "10")),
+            ).strip()
+            wsl_path = subprocess.check_output(["wslpath", "-u", out], text=True).strip()
+            img = Image.open(wsl_path)
+            if 0 < scale < 1.0:
+                w = max(1, int(img.width * scale))
+                h = max(1, int(img.height * scale))
+                img = img.resize((w, h), Image.LANCZOS)
+            return True, img, "ok"
+        except Exception as e_ps:
+            err_ps = str(e_ps)
+    else:
+        err_ps = "n/a"
 
-    if 0 < scale < 1.0:
-        w = max(1, int(img.width * scale))
-        h = max(1, int(img.height * scale))
-        img = img.resize((w, h), Image.LANCZOS)
+    # --- Linux compositor fallbacks: GNOME or wlroots ---
+    try:
+        tmp_png = os.path.join(tempfile.gettempdir(), "screenshare_fallback.png")
+        if shutil.which("gnome-screenshot"):
+            subprocess.run(["gnome-screenshot", "--file", tmp_png], check=True, timeout=10)
+        elif shutil.which("grim"):
+            # full-output Wayland screenshot on wlroots compositors (e.g., sway/hyprland)
+            subprocess.run(["grim", tmp_png], check=True, timeout=10)
+        else:
+            raise RuntimeError("no compositor screenshot tool (gnome-screenshot/grim) found")
 
-    return True, img, "ok"
+        img = Image.open(tmp_png)
+        if 0 < scale < 1.0:
+            w = max(1, int(img.width * scale))
+            h = max(1, int(img.height * scale))
+            img = img.resize((w, h), Image.LANCZOS)
+        return True, img, "ok"
+    except Exception as e_fb:
+        err_fallback = str(e_fb)
+
+    # If everything failed, report details for debugging
+    return False, None, f"Failed to grab (mss={err_primary}, wsl_ps={err_ps}, fallback={locals().get('err_fallback','n/a')})"
 
 
 def _encode_image_pil(img: Image.Image, fmt: str) -> Tuple[bool, bytes, str, int, int]:
