@@ -68,27 +68,27 @@ fi
 mkdir -p ./.screenshare_tmp
 rm -f ./.screenshare_tmp/* 2>/dev/null || true
 
+# Read newline-separated paths from PATHS_RAW
 files_raw=()
 while IFS= read -r P; do
-  [ -z "$P" ] && continue
+  [ -z "${P:-}" ] && continue
   files_raw+=("$P")
-done <<'EOF'
-$PATHS_RAW
-EOF
+done <<< "$PATHS_RAW"
 
 if [ "${#files_raw[@]}" -eq 0 ]; then
   echo "No frames returned — ending."
   exit 0
 fi
 
-# Stride every other frame
+# Stride every other frame; copy into CWD temp dir; sanitize names (no spaces)
 files=()
 take=1
 for P in "${files_raw[@]}"; do
   if [ $take -eq 1 ]; then
-    B="${P##*/}"
-    cp -f "$P" "./.screenshare_tmp/$B"
-    files+=("@.screenshare_tmp/$B")
+    B="${P##*/}"               # basename
+    S="${B// /_}"              # sanitize spaces
+    cp -f -- "$P" "./.screenshare_tmp/$S"
+    files+=("@.screenshare_tmp/$S")
     take=0
   else
     take=1
@@ -100,6 +100,7 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Build the @file token prefix
 prefix=""
 for f in "${files[@]}"; do
   prefix="$prefix$f "
