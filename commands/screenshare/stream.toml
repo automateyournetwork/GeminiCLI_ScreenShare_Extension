@@ -4,6 +4,10 @@ description = "Loop: burst → Gemini answer/transcript (or custom prompt) → p
 prompt = '''
 You have the tools: screenshare_status, screenshare_start, screenshare_burst.
 
+Behavior:
+
+0) Respect the [defaults] section for any missing args.
+
 Args:
 - cycles:int      How many capture→answer loops to run (0 = until safety cap/source closes).
 - pause_secs:int  Seconds to pause so the user can read before the next burst (default 30).
@@ -116,6 +120,7 @@ Loop rules:
 [defaults]
 # burst defaults
 format      = "jpg"
+
 n           = 0
 period_ms   = 150
 duration_ms = 10000
@@ -125,7 +130,7 @@ save_dir    = "."
 cycles      = 0
 pause_secs  = 30
 mode        = "reply"
-prompt      = ""            # ← new: optional custom instruction
+prompt   = "What can you tell me about this series of images in chronolical capture order from left to right?"
 # auto-start defaults (full virtual screen @ 1.0 scale)
 monitor_index = 0
 left = 0
