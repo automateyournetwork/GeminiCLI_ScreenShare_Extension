@@ -5,8 +5,6 @@ prompt = '''
 You have the tools: screenshare_status, screenshare_start, screenshare_capture.
 
 Behavior:
-0) Respect the [defaults] section for any missing args.
-
 1) Ensure source is open:
    - Call screenshare_status().
    - If open=false, call screenshare_start(monitor_index={{monitor_index|0}}, left={{left|0}}, top={{top|0}},
@@ -19,14 +17,14 @@ Behavior:
 
 3) Call screenshare_capture.
   - Save to the local folder {{save_dir|.}} with format {{format|jpg}}.
-  - Capture returns: captured_path:str, mime:str, width:int, height:int.
+  - Capture returns: path:str, mime:str, width:int, height:int.
   
 4) If prompt is empty or None, use: "What can you tell me about this capture?"
 
 5) If prompt present:
      Choose SEND_NAME:
-       - if outfile provided: copy CAPTURED_PATH -> ./outfile
-       - else use the bare filename of CAPTURED_PATH
+       - if outfile provided: copy path -> ./outfile
+       - else use the bare filename of path
      Then execute:
        GEMINI_BIN="${GEMINI_BIN:-gemini}"
        "$GEMINI_BIN" -p "@<SEND_NAME> <prompt>"
@@ -38,7 +36,7 @@ Behavior:
 
   PROMPT_TEXT="{{prompt}}"
   OUTFILE_RAW="{{outfile}}"
-  CAPTURED="{{captured_path}}"
+  CAPTURED="{{path}}"  # <-- The fix is here
   MIME="{{mime}}"
   W="{{width}}"
   H="{{height}}"
@@ -77,8 +75,7 @@ Behavior:
     echo "@$SEND_NAME $PROMPT_TEXT"
     exit 0
   fi
-}
-'''
+}'''
 
 [defaults]
 save_dir = "."
