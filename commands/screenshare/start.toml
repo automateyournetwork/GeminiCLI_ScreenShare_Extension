@@ -1,0 +1,29 @@
+name = "/screenshare:start"
+description = "Open a screen source (monitor or region)."
+
+prompt = '''
+You have the tool: screenshare_start.
+
+Args (all optional; defaults below):
+- monitor_index:int
+- left:int, top:int, width:int, height:int
+- scale:float
+
+Call:
+- screenshare_start(
+    monitor_index={{monitor_index|0}},
+    left={{left|0}}, top={{top|0}},
+    width={{width|0}}, height={{height|0}},
+    scale={{scale|1.0}}
+  ) -> { ok: {{ok}}, message: {{message}} }
+
+Then print: "Started: {{ok}} — {{message}}"
+'''
+
+[defaults]
+monitor_index = 0
+left = 0
+top = 0
+width = 0
+height = 0
+scale = 1.0

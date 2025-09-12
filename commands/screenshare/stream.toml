@@ -4,29 +4,28 @@ description = "Loop: burst → Gemini answer/transcript (or custom prompt) → p
 prompt = '''
 You have the tools: screenshare_status, screenshare_start, screenshare_burst.
 
-Behavior:
-
-0) Respect the [defaults] section for any missing args.
+0) Respect [defaults] for missing args.
 
 Args:
-- cycles:int      How many capture→answer loops to run (0 = until safety cap/source closes).
-- pause_secs:int  Seconds to pause so the user can read before the next burst (default 30).
-- mode:str        One of reply | transcribe | both. Default: reply. (Ignored if prompt is provided.)
-- prompt:str      Optional free-form instruction sent to Gemini. If set, overrides 'mode'.
-- save_dir, format, n, period_ms, duration_ms, warmup → forwarded to screenshare_burst.
-- monitor_index,left,top,width,height,scale → used for auto-start if closed.
+- cycles:int      (0 = run until source closes or safety time)
+- pause_secs:int  (default 30)
+- mode:str        reply | transcribe | both   (ignored if prompt provided)
+- prompt:str      optional; if set, overrides mode
+- save_dir, format, n, period_ms, duration_ms, warmup → forwarded to screenshare_burst
+- monitor_index,left,top,width,height,scale → for auto-start
 
-High-level behavior:
-- Prompt-level HANDS-FREE LOOP: status/auto-start → burst → (one shell: gemini + sleep) → repeat.
-- No loops inside the shell.
-- Re-check status before each burst.
-- Stop when source closed, no frames, cycles reached, or ~60 minutes elapsed.
+Per-cycle:
+1) screenshare_status() -> { open: {{open}} }
+   If not open: screenshare_start(...); re-check; if still closed → stop politely.
+2) screenshare_burst(
+     save_dir={{save_dir|'.'}}, format={{format|'jpg'}},
+     n={{n|0}}, period_ms={{period_ms|150}}, duration_ms={{duration_ms|10000}},
+     warmup={{warmup|0}}
+   ) -> { paths: {{paths}} }   # newline-joined
+   If {{paths}} empty → stop politely.
 
-Per-cycle steps:
-1) screenshare_status(); if open=false → call screenshare_start(...) with given/default geometry; re-check once; if still closed: end politely.
-2) screenshare_burst(...); bind newline-joined paths into {{paths}}; if empty: end politely.
-3) Run the shell once (stride every other frame, ensure tokens resolvable from CWD, build instruction from 'prompt' or 'mode', call gemini, then sleep).
-4) Repeat from step 1 until a stop condition.
+3) One shell run (stride, copy to CWD temp, build instruction, call gemini, sleep).
+4) Repeat until stop condition.
 
 !{
 set -euo pipefail
@@ -35,27 +34,23 @@ PATHS_RAW="{{paths}}"
 PAUSE="{{pause_secs}}"
 [ -z "$PAUSE" ] && PAUSE="30"
 
-# --- Determine instruction text ---
 MODE="{{mode}}"
 USER_PROMPT="{{prompt}}"
 
-# If user supplied a custom prompt, use it verbatim; otherwise fall back to mode templates.
+# Determine instruction
 if [ -n "${USER_PROMPT:-}" ] && [ "${USER_PROMPT}" != "None" ]; then
   INSTR="${USER_PROMPT}"
 else
   [ -z "$MODE" ] && MODE="reply"
   case "$MODE" in
     reply)
-      INSTR="You are a helpful assistant analyzing ONLY the attached photo sequence (left→right chronological). First infer the user's intent/content from the sequence; then reply as a concise assistant. Do not show an intermediate transcript."
+      INSTR="You are a helpful assistant analyzing ONLY the attached photo sequence (left→right chronological). First infer the user's intent/content from the sequence; then reply concisely. Do not show an intermediate transcript."
       ;;
     transcribe)
       INSTR="Analyze ONLY the attached photo sequence (left→right chronological). Transcribe what the user is conveying. If unsure about a term, bracket it in ALL CAPS. Output ONLY the transcript."
       ;;
     both)
-      INSTR="1) Transcribe what the user is conveying from the attached photo sequence (left→right).
-2) On the next line, reply as a helpful assistant.
-Format exactly:
-Transcript: <text>
+      INSTR="Transcript: <text>
 Assistant: <reply>"
       ;;
     *)
@@ -64,11 +59,10 @@ Assistant: <reply>"
   esac
 fi
 
-# --- Prepare selection and CWD copies (because save_dir may not be '.') ---
 mkdir -p ./.screenshare_tmp
 rm -f ./.screenshare_tmp/* 2>/dev/null || true
 
-# Read newline-separated paths from PATHS_RAW
+# Read newline-separated paths
 files_raw=()
 while IFS= read -r P; do
   [ -z "${P:-}" ] && continue
@@ -80,13 +74,13 @@ if [ "${#files_raw[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# Stride every other frame; copy into CWD temp dir; sanitize names (no spaces)
+# Stride every other frame; copy to temp; sanitize spaces
 files=()
 take=1
 for P in "${files_raw[@]}"; do
   if [ $take -eq 1 ]; then
-    B="${P##*/}"               # basename
-    S="${B// /_}"              # sanitize spaces
+    B="${P##*/}"
+    S="${B// /_}"
     cp -f -- "$P" "./.screenshare_tmp/$S"
     files+=("@.screenshare_tmp/$S")
     take=0
@@ -100,13 +94,11 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# Build the @file token prefix
 prefix=""
 for f in "${files[@]}"; do
   prefix="$prefix$f "
 done
 
-# --- One-shot call: print assistant reply/transcript per mode or custom prompt ---
 gemini -p "${prefix}${INSTR}"
 
 echo "(pausing ${PAUSE}s before next capture…)"
@@ -114,25 +106,26 @@ sleep "$PAUSE"
 }
 
 Loop rules:
-- If {{cycles}} > 0, repeat that many times unless a stop condition triggers earlier.
-- If {{cycles}} == 0, repeat until screen source closes or ~60 minutes elapse (safety valve).
+- If {{cycles}} > 0, repeat that many total cycles unless stopped earlier.
+- If {{cycles}} == 0, repeat until screen source closes or ~60 minutes elapse (safety).
 '''
 
 [defaults]
 # burst defaults
 format      = "jpg"
-
 n           = 0
 period_ms   = 150
 duration_ms = 10000
 warmup      = 0
 save_dir    = "."
+
 # loop defaults
 cycles      = 0
 pause_secs  = 30
 mode        = "reply"
-prompt   = "What can you tell me about this series of images in chronolical capture order from left to right?"
-# auto-start defaults (full virtual screen @ 1.0 scale)
+prompt      = "What can you tell me about this series of images in chronological capture order from left to right?"
+
+# auto-start defaults
 monitor_index = 0
 left = 0
 top = 0

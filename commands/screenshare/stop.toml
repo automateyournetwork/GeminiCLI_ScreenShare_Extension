@@ -1,0 +1,11 @@
+name = "/screenshare:stop"
+description = "Close the current screen source."
+
+prompt = '''
+You have the tool: screenshare_stop.
+
+Call:
+- screenshare_stop() -> { ok: {{ok}}, message: {{message}} }
+
+Then print: "Stopped: {{ok}} — {{message}}"
+'''
