@@ -131,6 +131,29 @@ def _grab() -> Tuple[bool, Optional[Image.Image], str]:
     from PIL import Image
     import shutil, subprocess, tempfile
 
+    # --- KDE Wayland Spectacle Patch ---
+    is_kde_wayland = os.environ.get('XDG_SESSION_DESKTOP') == 'KDE' and os.environ.get('XDG_SESSION_TYPE') == 'wayland'
+    if is_kde_wayland:
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+                output_path = tmp_file.name
+
+            command = ["spectacle", "-b", "-n", "-o", output_path]
+            subprocess.run(command, check=True, timeout=10)
+
+            img = Image.open(output_path)
+            os.remove(output_path) # Clean up the temp file
+
+            scale = float(_SRC.get("scale") or 1.0)
+            if 0 < scale < 1.0:
+                w = max(1, int(img.width * scale))
+                h = max(1, int(img.height * scale))
+                img = img.resize((w, h), Image.LANCZOS)
+            return True, img, "ok (spectacle)"
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as e:
+            return False, None, f"Spectacle command failed: {e}"
+    # --- End of Patch ---
+
     sct = _SRC.get("sct")
     region = _SRC.get("region")
     scale = float(_SRC.get("scale") or 1.0)
