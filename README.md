@@ -1,5 +1,5 @@
 # GeminiCLI_ScreenShare_Extension
-An Extension for Gemini-CLI that enables Webcam access including single frame capture and American Sign Language (ASL) modes
+An Extension for Gemini-CLI that enables desktop screen visibility access including single frame capture and streaming modes
 
 ## How to add to Gemini-CLI
 

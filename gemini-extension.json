@@ -1,6 +1,7 @@
 {
   "name": "screenshare",
   "version": "1.0.0",
+  "description": "A Gemini extension that provides screen sharing capabilities. Snapshots and streaming modes are supported. Gemini-CLI can watch your work over your shoulder",
   "mcpServers": {
     "screenshare": {
       "command": "bash",
